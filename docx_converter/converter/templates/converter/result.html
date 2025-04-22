@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Conversion Result</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1>Conversion Result</h1>
+      <p>Download your files:</p>
+      <ul>
+        <li>
+          <a
+            href="{% url 'download_file' upload.id 'html' %}"
+            class="btn btn-primary btn-sm"
+            >Download {{ html_filename }}</a
+          >
+        </li>
+        <li>
+          <a
+            href="{% url 'download_file' upload.id 'zip' %}"
+            class="btn btn-primary btn-sm"
+            >Download {{ zip_filename }}</a
+          >
+        </li>
+      </ul>
+      <p>
+        <a href="{% url 'edit_html' upload.id %}" class="btn btn-warning btn-sm"
+          >Edit HTML</a
+        >
+      </p>
+      <h2>Preview</h2>
+      <div class="border p-3">{{ html_content | safe }}</div>
+      <a href="{% url 'upload_docx' %}" class="btn btn-secondary mt-3"
+        >Upload Another</a
+      >
+    </div>
+    <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

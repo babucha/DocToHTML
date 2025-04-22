@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit HTML</title>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
+    <link href="/static/css/styles.css" rel="stylesheet">
+    <link href="/static/js/tinymce/plugins/codesample/css/prism.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Edit HTML</h1>
+        <form method="post">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="html_content" class="form-label">HTML Content</label>
+                <textarea name="html_content" id="html_content" class="form-control">{{ form.html_content.value | safe }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{% url 'upload_docx' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+    <script src="/static/js/tinymce/tinymce.min.js"></script>
+    <script>
+        // TinyMCE is licensed under the GNU Lesser General Public License (LGPL) version 2.1
+        // See https://www.tiny.cloud/docs/tinymce/6/lgpl/ for details
+        tinymce.init({
+            selector: '#html_content',
+            plugins: 'lists link table code image advlist codesample',
+            toolbar: 'undo redo | formatselect | bold italic underline | bullist numlist | link table image | styles | codesample',
+            style_formats: [
+                { title: 'Warning', block: 'div', classes: 'warning' },
+                { title: 'Important', block: 'div', classes: 'important' },
+                { title: 'Code', block: 'pre', classes: 'code' },
+                { title: 'Title', block: 'h1', classes: 'title' },
+                { title: 'Subtitle', block: 'h2', classes: 'subtitle' }
+            ],
+            content_css: [
+                '/static/css/styles.css',
+                '/static/js/tinymce/plugins/codesample/css/prism.css'
+            ],
+            height: 500,
+            menubar: false,
+            images_upload_url: '/upload_image/',
+            images_upload_base_path: '/media/output/{{ upload.id }}/images/',
+            valid_elements: 'p,pre[class],div[class],h1[class],h2[class],img[src|alt|class],a[href],ul,ol,li,table,tr,td,th,code,span,b,i',
+            codesample_languages: [
+                { text: 'XML', value: 'xml' },
+                { text: 'HTML', value: 'html' }
+            ],
+            protect: [/&lt;\w+[^&gt;]*&gt;/g, /&lt;\/\w+&gt;/g],  // Защищаем экранированные теги
+            setup: function (editor) {
+                editor.on('init', function () {
+                    console.log('TinyMCE initialized successfully');
+                    // Форматируем <pre class="code"> как codesample
+                    editor.dom.select('pre.code').forEach(function (node) {
+                        console.log('Formatting pre:', node.innerHTML);
+                        editor.dom.addClass(node, 'language-xml');
+                        // Применяем codesample вручную
+                        editor.execCommand('InsertCodeSample', false, {
+                            language: 'xml',
+                            content: node.innerHTML
+                        });
+                    });
+                });
+                editor.on('error', function (e) {
+                    console.error('TinyMCE error:', e.message);
+                });
+                // Поддержка копирования кода
+                editor.on('copy', function (e) {
+                    var sel = editor.selection.getContent({ format: 'text' });
+                    if (sel) {
+                        e.clipboardData.setData('text/plain', sel);
+                        e.preventDefault();
+                    }
+                });
+            },
+            entity_encoding: 'raw',
+            init_instance_callback: function (editor) {
+                console.log('Editor instance created:', editor.id);
+            }
+        });
+    </script>
+    <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+</body>
+</html>
