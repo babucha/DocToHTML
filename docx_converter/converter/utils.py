@@ -1,4 +1,3 @@
-import html
 import os
 import re
 import zipfile
@@ -68,18 +67,10 @@ def process_docx(docx_path, upload_id, original_filename):
             # Заменяем <p> на <pre class="code">, если нужно
             if tag.name == "p":
                 new_tag = soup.new_tag("pre")
-                new_tag["class"] = ["code"]
-                # Экранируем текст
-                new_tag.string = html.escape(text)
+                new_tag["class"] = ["code", "language-xml"]
+                new_tag.string = text
                 tag.replace_with(new_tag)
                 tag = new_tag
-            # Для <pre> экранируем содержимое
-            if tag.string:
-                tag.string = html.escape(tag.string)
-            else:
-                for child in tag.children:
-                    if child.string:
-                        child.string = html.escape(child.string)
 
     # Извлечение изображений
     image_files = extract_images(docx_path, images_dir)
@@ -120,26 +111,36 @@ def save_edited_html(html_content, upload_id, html_filename):
     output_dir = os.path.join(settings.MEDIA_ROOT, "output", str(upload_id))
     html_path = os.path.join(output_dir, html_filename)
 
-    # Парсинг отредактированного HTML
-    soup = BeautifulSoup(html_content, "html.parser")
+    user_style = ""
 
-    # Экранируем содержимое <pre>
-    for pre in soup.find_all("pre"):
-        if pre.string:
-            pre.string = html.escape(pre.string)
-        else:
-            for child in pre.children:
-                if child.string:
-                    child.string = html.escape(child.string)
+    with open("./static/css/styles.css", "r") as f:
+        user_style = f.read()
 
-    # Создание полной HTML-структуры
-    html_doc = BeautifulSoup(
-        '<!DOCTYPE html><html><head><link rel="stylesheet" href="/static/css/styles.css"></head><body></body></html>',
-        "html.parser",
-    )
-    html_doc.body.append(soup)
+    # Формируем HTML с UTF-8 и CDN-стилями
+    html_doc = f"""<!DOCTYPE html>
+              <html lang="en">
+              <head>
+                  <meta charset="UTF-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Converted Document</title>
+                  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet">
+                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
+                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
+                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+              </head>
+              <body>
+              <div class="container-sm mt-5">
+                {html_content}
+              <div class="container-sm mt-5">
+              </body>
+              <style>
+                  {user_style}
+              </style>
+              </html>"""
 
-    # Сохранение
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(str(html_doc.prettify()))
+    # Сохранение с явной кодировкой UTF-8
+    with open(html_path, "w", encoding="utf-8-sig") as f:
+        f.write(html_doc)
     return html_path

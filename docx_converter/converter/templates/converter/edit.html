@@ -1,87 +1,149 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta description="test" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Edit HTML</title>
-    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet">
-    <link href="/static/css/styles.css" rel="stylesheet">
-    <link href="/static/js/tinymce/plugins/codesample/css/prism.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <h1>Edit HTML</h1>
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-3">
-                <label for="html_content" class="form-label">HTML Content</label>
-                <textarea name="html_content" id="html_content" class="form-control">{{ form.html_content.value | safe }}</textarea>
-            </div>
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-            <a href="{% url 'upload_docx' %}" class="btn btn-secondary">Cancel</a>
-        </form>
-    </div>
+    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
+    <link href="/static/css/styles.css" rel="stylesheet" />
+    <link href="/static/js/tinymce/plugins/codesample/css/prism.css" rel="stylesheet" />
     <script src="/static/js/tinymce/tinymce.min.js"></script>
-    <script>
-        // TinyMCE is licensed under the GNU Lesser General Public License (LGPL) version 2.1
-        // See https://www.tiny.cloud/docs/tinymce/6/lgpl/ for details
-        tinymce.init({
-            selector: '#html_content',
-            plugins: 'lists link table code image advlist codesample',
-            toolbar: 'undo redo | formatselect | bold italic underline | bullist numlist | link table image | styles | codesample',
-            style_formats: [
-                { title: 'Warning', block: 'div', classes: 'warning' },
-                { title: 'Important', block: 'div', classes: 'important' },
-                { title: 'Code', block: 'pre', classes: 'code' },
-                { title: 'Title', block: 'h1', classes: 'title' },
-                { title: 'Subtitle', block: 'h2', classes: 'subtitle' }
-            ],
-            content_css: [
-                '/static/css/styles.css',
-                '/static/js/tinymce/plugins/codesample/css/prism.css'
-            ],
-            height: 500,
-            menubar: false,
-            images_upload_url: '/upload_image/',
-            images_upload_base_path: '/media/output/{{ upload.id }}/images/',
-            valid_elements: 'p,pre[class],div[class],h1[class],h2[class],img[src|alt|class],a[href],ul,ol,li,table,tr,td,th,code,span,b,i',
-            codesample_languages: [
-                { text: 'XML', value: 'xml' },
-                { text: 'HTML', value: 'html' }
-            ],
-            protect: [/&lt;\w+[^&gt;]*&gt;/g, /&lt;\/\w+&gt;/g],  // Защищаем экранированные теги
-            setup: function (editor) {
-                editor.on('init', function () {
-                    console.log('TinyMCE initialized successfully');
-                    // Форматируем <pre class="code"> как codesample
-                    editor.dom.select('pre.code').forEach(function (node) {
-                        console.log('Formatting pre:', node.innerHTML);
-                        editor.dom.addClass(node, 'language-xml');
-                        // Применяем codesample вручную
-                        editor.execCommand('InsertCodeSample', false, {
-                            language: 'xml',
-                            content: node.innerHTML
-                        });
-                    });
-                });
-                editor.on('error', function (e) {
-                    console.error('TinyMCE error:', e.message);
-                });
-                // Поддержка копирования кода
-                editor.on('copy', function (e) {
-                    var sel = editor.selection.getContent({ format: 'text' });
-                    if (sel) {
-                        e.clipboardData.setData('text/plain', sel);
-                        e.preventDefault();
-                    }
-                });
-            },
-            entity_encoding: 'raw',
-            init_instance_callback: function (editor) {
-                console.log('Editor instance created:', editor.id);
-            }
-        });
-    </script>
+    <script src="/static/js/tinymce/plugins/codesample/js/prism-core.js"></script>
+    <script src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"></script>
+    <script src="/static/js/tinymce/plugins/codesample/js/prism-java.js"></script>
+    <script src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"></script>
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1>Edit HTML</h1>
+      <form method="post" id="content-form">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label for="html_content" class="form-label">HTML Content</label>
+          <textarea name="html_content" id="html_content" class="form-control">
+            {{ form.html_content.value }}
+          </textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary">Cancel</a>
+      </form>
+    </div>
     <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-</body>
+    <script>
+      function detectLanguage(text) {
+        text = text.toLowerCase().trim();
+        if (text.match(/<\w+\b[^>]*>|<\/\w+>/)) return "language-markup";
+        if (text.match(/\b(class|public|static|void|int|main)\b/)) return "language-java";
+        if (text.match(/\b(#!\/bin\/bash|echo|export|if\s*\[|fi)\b/)) return "language-bash";
+        return "language-markup";
+      }
+
+      document.addEventListener("DOMContentLoaded", function () {
+        tinymce.init({
+          selector: "textarea#html_content",
+          encoding: "xml",
+          entity_encoding: "raw",
+          entities: "",
+          valid_elements: "*[*]",
+          valid_children: "+pre[code]",
+          verify_html: false,
+          extended_valid_elements: "pre[class|data-language],code[class]",
+          plugins:
+            "codesample advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table",
+          toolbar:
+            "undo redo | formatselect | bold italic | forecolor backcolor | bullist numlist outdent indent | link table image | preview | styles | codesample | removeformat",
+          style_formats: [
+            { title: "Warning", block: "div", classes: "warning" },
+            { title: "Important", block: "div", classes: "important" },
+            { title: "Code", block: "pre", classes: "code" },
+            { title: "Title", block: "h1", classes: "title" },
+            { title: "Subtitle", block: "h2", classes: "subtitle" },
+          ],
+          content_css: [
+            "/static/css/styles.css",
+            "/static/js/tinymce/plugins/codesample/css/prism.css",
+          ],
+          height: 600,
+          images_upload_url: "/upload_image/",
+          images_upload_base_path: "/media/output/{{ upload.id }}/images/",
+          codesample_languages: [
+            { text: "XML/HTML", value: "markup" },
+            { text: "Java", value: "java" },
+            { text: "Bash", value: "bash" },
+          ],
+          setup: function (editor) {
+            editor.on("init", function () {
+              console.log("TinyMCE initialized successfully");
+              editor.dom.select("pre.code").forEach(function (node) {
+                if (!node.classList.contains("language-markup") && !node.classList.contains("language-java") && !node.classList.contains("language-bash")) {
+                  editor.dom.addClass(node, "language-markup");
+                }
+              });
+            });
+
+            editor.on("SaveContent", function (e) {
+              console.log("SaveContent:", e.content);
+            });
+
+            editor.on("Submit", function (e) {
+              console.log("Content before submit:", editor.getContent());
+            });
+          },
+          license_key: "gpl",
+        });
+
+        document
+          .getElementById("content-form")
+          .addEventListener("submit", function (e) {
+            let content = tinymce.get("html_content").getContent({ format: "raw" });
+            content = cleanSpansInPre(content);
+
+            document.getElementById("html_content").value = content;
+            console.log("Form content after cleanup:", content);
+          });
+
+        function cleanSpansInPre(html) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, "text/html");
+
+          doc.querySelectorAll("pre").forEach((pre) => {
+            pre.removeAttribute("contenteditable");
+            pre.removeAttribute("data-mce-highlighted");
+
+            // Сохраняем или определяем language-*
+            let languageClass = Array.from(pre.classList).find(c => c.startsWith("language-"));
+            let code = pre.querySelector("code");
+            if (code) {
+              languageClass = languageClass || Array.from(code.classList).find(c => c.startsWith("language-")) || detectLanguage(code.innerHTML);
+            } else {
+              languageClass = languageClass || detectLanguage(pre.innerHTML);
+              code = doc.createElement("code");
+              code.className = languageClass;
+              code.innerHTML = pre.innerHTML;
+              pre.innerHTML = "";
+              pre.appendChild(code);
+            }
+
+            const classes = Array.from(pre.classList)
+              .filter(c => c.startsWith("language-") || c === "code")
+              .join(" ");
+            pre.setAttribute("class", classes || languageClass);
+
+            // Удаляем <span> внутри <code>
+            const spans = code.querySelectorAll("span");
+            spans.forEach((span) => {
+              const text = doc.createTextNode(span.textContent);
+              span.parentNode.replaceChild(text, span);
+            });
+
+            console.log("Processed pre:", pre.outerHTML);
+          });
+
+          console.log("Processed pre tags:", doc.querySelectorAll("pre").length);
+          return doc.body.innerHTML;
+        }
+      });
+    </script>
+  </body>
 </html>

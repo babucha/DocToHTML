@@ -1,3 +1,4 @@
+import logging
 import os
 import uuid
 
@@ -8,6 +9,8 @@ from django.shortcuts import get_object_or_404, render
 from .forms import DocumentUploadForm, HtmlEditForm
 from .models import DocumentUpload
 from .utils import process_docx, save_edited_html
+
+logger = logging.getLogger(__name__)
 
 
 def upload_docx(request):
@@ -78,12 +81,14 @@ def download_file(request, upload_id, file_type):
     upload = get_object_or_404(DocumentUpload, id=upload_id)
     if file_type == "html":
         file_path = upload.html_file.path
+        content_type = "text/html; charset=utf-8"
     elif file_type == "zip":
         file_path = upload.images_zip.path
+        content_type = "application/zip"
     else:
         return HttpResponse(status=404)
     with open(file_path, "rb") as f:
-        response = HttpResponse(f.read(), content_type="application/octet-stream")
+        response = HttpResponse(f.read(), content_type=content_type)
         response["Content-Disposition"] = (
             f"attachment; filename={os.path.basename(file_path)}"
         )
@@ -107,3 +112,33 @@ def upload_image(request):
         image_url = f"/media/output/{upload.id}/images/{image_name}"
         return JsonResponse({"location": image_url})
     return JsonResponse({"error": "Invalid request"}, status=400)
+
+
+def result(request, upload_id):
+    upload = get_object_or_404(DocumentUpload, id=upload_id)
+    output_dir = os.path.join(settings.MEDIA_ROOT, "output", str(upload.id))
+    html_filename = f"converted_{upload.id}.html"
+    zip_filename = f"images_{upload.id}.zip"
+
+    # Чтение HTML-контента
+    html_path = os.path.join(output_dir, html_filename)
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+    except FileNotFoundError:
+        logger.error(f"HTML file not found: {html_path}")
+        return render(
+            request, "converter/result.html", {"error": "HTML file not found"}
+        )
+
+    logger.info(f"Displaying result for upload {upload_id}")
+    return render(
+        request,
+        "converter/result.html",
+        {
+            "upload": upload,
+            "html_content": html_content,
+            "html_filename": html_filename,
+            "zip_filename": zip_filename,
+        },
+    )

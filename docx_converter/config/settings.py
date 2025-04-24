@@ -14,6 +14,7 @@ SECRET_KEY = config("DJANGO_SECRET_KEY")
 DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=Csv())
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", cast=Csv())
 
 # Application definition
 INSTALLED_APPS = [
@@ -38,7 +39,7 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "docx_converter.urls"
+ROOT_URLCONF = "config.urls"
 
 TEMPLATES = [
     {
@@ -56,7 +57,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "docx_converter.wsgi.application"
+WSGI_APPLICATION = "config.wsgi.application"
 
 # Database
 DATABASES = {
@@ -94,6 +95,11 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = config("STATIC_ROOT", default=os.path.join(BASE_DIR, "staticfiles"))
 
+# if not DEBUG:
+STATICFILES_DIRS = [
+      os.path.join(BASE_DIR, "static"),
+  ]
+#
 # Media files
 MEDIA_URL = "/media/"
 MEDIA_ROOT = config("MEDIA_ROOT", default=os.path.join(BASE_DIR, "media"))
@@ -107,4 +113,9 @@ CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", cast=Csv())
 # Security settings for production
 SECURE_SSL_REDIRECT = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
+if not DEBUG:
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG

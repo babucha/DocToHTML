@@ -1,42 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Conversion Result</title>
-    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
-  </head>
-  <body>
-    <div class="container mt-5">
-      <h1>Conversion Result</h1>
-      <p>Download your files:</p>
-      <ul>
-        <li>
-          <a
-            href="{% url 'download_file' upload.id 'html' %}"
-            class="btn btn-primary btn-sm"
-            >Download {{ html_filename }}</a
-          >
-        </li>
-        <li>
-          <a
-            href="{% url 'download_file' upload.id 'zip' %}"
-            class="btn btn-primary btn-sm"
-            >Download {{ zip_filename }}</a
-          >
-        </li>
-      </ul>
-      <p>
-        <a href="{% url 'edit_html' upload.id %}" class="btn btn-warning btn-sm"
-          >Edit HTML</a
-        >
-      </p>
-      <h2>Preview</h2>
-      <div class="border p-3">{{ html_content | safe }}</div>
-      <a href="{% url 'upload_docx' %}" class="btn btn-secondary mt-3"
-        >Upload Another</a
-      >
-    </div>
-    <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-  </body>
-</html>
+  <!-- converter/result.html -->
+  <!DOCTYPE html>
+  <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Conversion Result</title>
+      <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
+      <link href="/static/js/tinymce/plugins/codesample/css/prism.css" rel="stylesheet" />
+      <script src="/static/js/tinymce/plugins/codesample/js/prism-core.js"></script>
+      <script src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"></script>
+      <script src="/static/js/tinymce/plugins/codesample/js/prism-java.js"></script>
+      <script src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"></script>
+    </head>
+    <body>
+      <div class="container mt-5">
+        <h1>Conversion Result</h1>
+        <div class="card mb-3">
+          <div class="card-body">
+            <h5 class="card-title">HTML Preview</h5>
+            <div>{{ html_content|safe }}</div>
+          </div>
+        </div>
+        <div class="mb-3">
+          <a href="{% url 'converter:download_file' upload.id 'html' %}" class="btn btn-primary">Download HTML ({{ html_filename }})</a>
+          <a href="{% url 'converter:download_file' upload.id 'zip' %}" class="btn btn-secondary">Download Images ZIP ({{ zip_filename }})</a>
+        </div>
+        <div class="mb-3">
+          <a href="{% url 'converter:edit_html' upload.id %}" class="btn btn-primary">Edit HTML</a>
+          <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary">Upload Another</a>
+        </div>
+      </div>
+      <script>
+        function detectLanguage(text) {
+          text = text.toLowerCase().trim();
+          if (text.match(/<\w+\b[^>]*>|<\/\w+>/)) return "language-markup";
+          if (text.match(/\b(class|public|static|void|int|main)\b/)) return "language-java";
+          if (text.match(/\b(#!\/bin\/bash|echo|export|if\s*\[|fi)\b/)) return "language-bash";
+          return "language-markup";
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+          console.log("Prism initializing...");
+          console.log("Pre elements:", document.querySelectorAll("pre").length);
+          console.log("Pre classes:", Array.from(document.querySelectorAll("pre")).map(pre => pre.className));
+          console.log("Code elements:", document.querySelectorAll("pre code").length);
+          console.log("Code classes:", Array.from(document.querySelectorAll("pre code")).map(code => code.className));
+
+          document.querySelectorAll("pre.code").forEach((pre) => {
+            if (!pre.querySelector("code")) {
+              const code = document.createElement("code");
+              // Используем класс language-* из <pre> или определяем по содержимому
+              const languageClass = Array.from(pre.classList).find(c => c.startsWith("language-")) || detectLanguage(pre.innerHTML);
+              code.className = languageClass;
+              code.innerHTML = pre.innerHTML;
+              pre.innerHTML = "";
+              pre.appendChild(code);
+            }
+          });
+
+          Prism.highlightAll();
+          console.log("Prism highlight applied");
+          console.log("Spans after Prism:", document.querySelectorAll("pre span").length);
+        });
+      </script>
+    </body>
+  </html>

@@ -14,8 +14,9 @@ services:
       db:
         condition: service_healthy
     command: >
-      sh -c "python manage.py migrate && python manage.py collectstatic --no-input &&
-             gunicorn --bind 0.0.0.0:8000 docx_converter.wsgi:application"
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
 
   db:
     image: postgres:14
