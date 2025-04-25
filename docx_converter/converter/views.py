@@ -28,17 +28,10 @@ def upload_docx(request):
             upload.html_file = os.path.relpath(html_path, settings.MEDIA_ROOT)
             upload.images_zip = os.path.relpath(zip_path, settings.MEDIA_ROOT)
             upload.save()
-            logger.debug(f"Uploaded document {upload.id}, HTML: {html_filename}")
-            return render(
-                request,
-                "converter/result.html",
-                {
-                    "upload": upload,
-                    "html_content": html_content,
-                    "html_filename": html_filename,
-                    "zip_filename": zip_filename,
-                },
+            logger.debug(
+                f"Uploaded document {upload.id}, HTML: {html_filename}, redirecting to edit"
             )
+            return redirect("converter:edit_html", upload_id=upload.id)
     else:
         form = DocumentUploadForm()
     return render(request, "converter/upload.html", {"form": form})
