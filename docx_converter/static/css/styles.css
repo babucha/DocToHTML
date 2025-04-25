@@ -1,3 +1,4 @@
+/* Существующие стили */
 .warning {
     background-color: #fff3cd;
     border: 1px solid #ffeeba;
@@ -21,13 +22,21 @@
     overflow-x: auto;
     border-radius: 0.25rem;
 }
-.title {
-    font-size: 2rem;
-    font-weight: bold;
-    color: #333;
+
+/* Стили для таблиц */
+.default-bordered-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 1rem;
 }
-.subtitle {
-    font-size: 1.5rem;
+.default-bordered-table th,
+.default-bordered-table td {
+    border: 1px solid #dee2e6;
+    padding: 8px;
+    text-align: left;
+}
+.default-bordered-table th,
+.default-bordered-table .table-header {
+    background-color: #f8f9fa;
     font-weight: bold;
-    color: #555;
 }

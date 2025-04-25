@@ -1,11 +1,11 @@
 import os
 import re
+import uuid
 import zipfile
 
 import mammoth
 from bs4 import BeautifulSoup
 from django.conf import settings
-from docx import Document
 
 
 def process_docx(docx_path, upload_id, original_filename):
@@ -18,6 +18,8 @@ def process_docx(docx_path, upload_id, original_filename):
     base_name = re.sub(r"[^\w\-]", "_", os.path.splitext(original_filename)[0])
     html_filename = f"{base_name}.html"
     zip_filename = f"{base_name}_images.zip"
+    html_path = os.path.join(output_dir, html_filename)
+    zip_path = os.path.join(output_dir, zip_filename)
 
     # Пользовательские стили
     style_map = """
@@ -28,76 +30,106 @@ def process_docx(docx_path, upload_id, original_filename):
         h2 => h2.subtitle
     """
 
-    # Извлечение изображений
-    def extract_images(docx_path, images_dir):
-        doc = Document(docx_path)
-        image_files = {}
-        image_counter = 1
-
-        for rel in doc.part.rels.values():
-            if "image" in rel.target_ref:
-                image_data = rel.target_part.blob
-                ext = ".png" if "png" in rel.target_ref.lower() else ".jpg"
-                image_name = f"image_{image_counter}{ext}"
-                image_path = os.path.join(images_dir, image_name)
-                with open(image_path, "wb") as f:
-                    f.write(image_data)
-                image_files[rel.target_ref] = image_name
-                image_counter += 1
-        return image_files
+    # Обработка изображений
+    def convert_image(image):
+        ext = image.content_type.split("/")[-1]
+        image_name = f"image_{uuid.uuid4().hex[:8]}.{ext}"
+        image_path = os.path.join(images_dir, image_name)
+        with image.open() as image_bytes:
+            with open(image_path, "wb") as f:
+                f.write(image_bytes.read())
+        return {"src": f"/media/output/{upload_id}/images/{image_name}"}
 
     # Конвертация в HTML
     with open(docx_path, "rb") as docx_file:
-        result = mammoth.convert_to_html(docx_file, style_map=style_map)
+        result = mammoth.convert_to_html(
+            docx_file,
+            style_map=style_map,
+            convert_image=mammoth.images.img_element(convert_image),
+        )
         html_content = result.value
 
     # Парсинг HTML
     soup = BeautifulSoup(html_content, "html.parser")
 
-    # Обработка параграфов
+    # Обработка кода
     for tag in soup.find_all(["p", "pre"]):
         text = tag.get_text().strip()
-        # Проверяем, является ли тег <pre> или <p> с чистым XML-подобным содержимым
         is_xml_like = (
             tag.name == "p"
             and text
             and re.match(r"^\s*<\w+\s+[^>]*>.*</\w+>\s*$", text)
         )
         if tag.name == "pre" or is_xml_like:
-            # Заменяем <p> на <pre class="code">, если нужно
-            if tag.name == "p":
-                new_tag = soup.new_tag("pre")
-                new_tag["class"] = ["code", "language-xml"]
-                new_tag.string = text
-                tag.replace_with(new_tag)
-                tag = new_tag
+            new_pre = soup.new_tag("pre")
+            new_pre["class"] = ["code", "language-xml"]
+            new_code = soup.new_tag("code", attrs={"class": "language-xml"})
+            new_code.string = text
+            new_pre.append(new_code)
+            tag.replace_with(new_pre)
 
-    # Извлечение изображений
-    image_files = extract_images(docx_path, images_dir)
+    # Обработка таблиц
+    for table in soup.find_all("table"):
+        table["class"] = table.get("class", []) + ["default-bordered-table"]
+        if "mce-item-table" in table["class"]:
+            table["class"].remove("mce-item-table")
+        # Проверка на <th> и стилизация первой строки
+        has_th = bool(table.find("th"))
+        if not has_th:
+            first_tr = table.find("tr")
+            if first_tr:
+                for td in first_tr.find_all("td"):
+                    td["class"] = td.get("class", []) + ["table-header"]
 
-    # Замена base64-изображений на ссылки
-    for img in soup.find_all("img"):
-        src = img.get("src", "")
-        if src.startswith("data:image"):
-            for rel_ref, image_name in image_files.items():
-                if rel_ref in src or image_name in src:
-                    img["src"] = f"/media/output/{upload_id}/images/{image_name}"
-                    break
-
-    # Создание полной HTML-структуры
+    # Создание HTML с минимальной обвязкой
     html_doc = BeautifulSoup(
-        '<!DOCTYPE html><html><head><link rel="stylesheet" href="/static/css/styles.css"></head><body></body></html>',
+        "<!DOCTYPE html><html><head></head><body></body></html>",
         "html.parser",
+    )
+    head = html_doc.head
+    head.append(html_doc.new_tag("meta", charset="utf-8"))
+    head.append(
+        html_doc.new_tag(
+            "link",
+            rel="stylesheet",
+            href="/static/js/tinymce/plugins/codesample/css/prism.css",
+        )
+    )
+    head.append(
+        html_doc.new_tag("link", rel="stylesheet", href="/static/css/styles.css")
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-core.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-java.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-json.js"
+        )
     )
     html_doc.body.append(soup)
 
     # Сохранение HTML
-    html_path = os.path.join(output_dir, html_filename)
     with open(html_path, "w", encoding="utf-8") as f:
-        f.write(str(html_doc.prettify()))
+        f.write(str(html_doc))
 
-    # Создание ZIP-архива
-    zip_path = os.path.join(output_dir, zip_filename)
+    # Создание ZIP
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         for root, _, files in os.walk(images_dir):
             for file in files:
@@ -111,36 +143,59 @@ def save_edited_html(html_content, upload_id, html_filename):
     output_dir = os.path.join(settings.MEDIA_ROOT, "output", str(upload_id))
     html_path = os.path.join(output_dir, html_filename)
 
-    user_style = ""
+    # Парсинг HTML
+    soup = BeautifulSoup(html_content, "html.parser")
 
-    with open("./static/css/styles.css", "r") as f:
-        user_style = f.read()
+    # Очистка от старой обвязки
+    if soup.head:
+        soup.head.decompose()
 
-    # Формируем HTML с UTF-8 и CDN-стилями
-    html_doc = f"""<!DOCTYPE html>
-              <html lang="en">
-              <head>
-                  <meta charset="UTF-8">
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Converted Document</title>
-                  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-                  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet">
-                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
-                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
-                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js"></script>
-                  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
-              </head>
-              <body>
-              <div class="container-sm mt-5">
-                {html_content}
-              <div class="container-sm mt-5">
-              </body>
-              <style>
-                  {user_style}
-              </style>
-              </html>"""
+    # Создание HTML с минимальной обвязкой
+    html_doc = BeautifulSoup(
+        "<!DOCTYPE html><html><head></head><body></body></html>",
+        "html.parser",
+    )
+    head = html_doc.head
+    head.append(html_doc.new_tag("meta", charset="utf-8"))
+    head.append(
+        html_doc.new_tag(
+            "link",
+            rel="stylesheet",
+            href="/static/js/tinymce/plugins/codesample/css/prism.css",
+        )
+    )
+    head.append(
+        html_doc.new_tag("link", rel="stylesheet", href="/static/css/styles.css")
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-core.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-java.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"
+        )
+    )
+    head.append(
+        html_doc.new_tag(
+            "script", src="/static/js/tinymce/plugins/codesample/js/prism-json.js"
+        )
+    )
+    html_doc.body.append(soup)
 
-    # Сохранение с явной кодировкой UTF-8
-    with open(html_path, "w", encoding="utf-8-sig") as f:
-        f.write(html_doc)
+    # Сохранение
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(str(html_doc))
+
     return html_path

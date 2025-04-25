@@ -2,9 +2,10 @@ import logging
 import os
 import uuid
 
+from bs4 import BeautifulSoup
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 
 from .forms import DocumentUploadForm, HtmlEditForm
 from .models import DocumentUpload
@@ -27,6 +28,7 @@ def upload_docx(request):
             upload.html_file = os.path.relpath(html_path, settings.MEDIA_ROOT)
             upload.images_zip = os.path.relpath(zip_path, settings.MEDIA_ROOT)
             upload.save()
+            logger.debug(f"Uploaded document {upload.id}, HTML: {html_filename}")
             return render(
                 request,
                 "converter/result.html",
@@ -53,20 +55,15 @@ def edit_html(request, upload_id):
             )
             upload.html_file = os.path.relpath(html_path, settings.MEDIA_ROOT)
             upload.save()
-            return render(
-                request,
-                "converter/result.html",
-                {
-                    "upload": upload,
-                    "html_content": html_content,
-                    "html_filename": os.path.basename(upload.html_file.name),
-                    "zip_filename": os.path.basename(upload.images_zip.name),
-                },
+            logger.debug(
+                f"Saved edited HTML for upload {upload.id}, HTML: {os.path.basename(html_path)}"
             )
+            return redirect("converter:result", upload_id=upload.id)
     else:
         with open(upload.html_file.path, "r", encoding="utf-8") as f:
             html_content = f.read()
         form = HtmlEditForm(initial={"html_content": html_content})
+    logger.debug(f"Rendering edit.html for upload {upload.id}")
     return render(
         request,
         "converter/edit.html",
@@ -81,18 +78,111 @@ def download_file(request, upload_id, file_type):
     upload = get_object_or_404(DocumentUpload, id=upload_id)
     if file_type == "html":
         file_path = upload.html_file.path
-        content_type = "text/html; charset=utf-8"
-    elif file_type == "zip":
-        file_path = upload.images_zip.path
-        content_type = "application/zip"
-    else:
-        return HttpResponse(status=404)
-    with open(file_path, "rb") as f:
-        response = HttpResponse(f.read(), content_type=content_type)
+        with open(file_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        soup = BeautifulSoup(html_content, "html.parser")
+        # Полная обвязка
+        head = soup.new_tag("head")
+        head.append(soup.new_tag("meta", charset="utf-8"))
+        head.append(
+            soup.new_tag(
+                "meta",
+                attrs={
+                    "name": "viewport",
+                    "content": "width=device-width, initial-scale=1.0",
+                },
+            )
+        )
+        head.append(soup.new_tag("title"))
+        head.title.string = "Converted Document"
+        head.append(
+            soup.new_tag(
+                "link",
+                rel="stylesheet",
+                href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css",
+            )
+        )
+        head.append(
+            soup.new_tag(
+                "link",
+                rel="stylesheet",
+                href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css",
+            )
+        )
+        # Встроить styles.css
+        try:
+            with open(
+                os.path.join(settings.STATICFILES_DIRS[0], "css/styles.css"),
+                "r",
+                encoding="utf-8",
+            ) as f:
+                css_content = f.read()
+        except FileNotFoundError:
+            logger.error(f"styles.css not found in {settings.STATICFILES_DIRS[0]}")
+            css_content = ""
+        style = soup.new_tag("style")
+        style.string = css_content
+        head.append(style)
+        head.append(
+            soup.new_tag(
+                "script",
+                src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js",
+            )
+        )
+        head.append(
+            soup.new_tag(
+                "script",
+                src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js",
+            )
+        )
+        head.append(
+            soup.new_tag(
+                "script",
+                src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-java.min.js",
+            )
+        )
+        head.append(
+            soup.new_tag(
+                "script",
+                src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js",
+            )
+        )
+        head.append(
+            soup.new_tag(
+                "script",
+                src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js",
+            )
+        )
+        if soup.head:
+            soup.head.replace_with(head)
+        else:
+            soup.html.insert(0, head)
+        # Обернуть контент в container-sm
+        body_content = soup.body.extract() if soup.body else soup
+        new_body = soup.new_tag("body")
+        container = soup.new_tag("div", attrs={"class": "container-sm mt-5"})
+        container.append(body_content)
+        new_body.append(container)
+        if soup.html.body:
+            soup.html.body.replace_with(new_body)
+        else:
+            soup.html.append(new_body)
+        response = HttpResponse(str(soup), content_type="text/html; charset=utf-8")
         response["Content-Disposition"] = (
             f"attachment; filename={os.path.basename(file_path)}"
         )
         return response
+    elif file_type == "zip":
+        file_path = upload.images_zip.path
+        content_type = "application/zip"
+        with open(file_path, "rb") as f:
+            response = HttpResponse(f.read(), content_type=content_type)
+            response["Content-Disposition"] = (
+                f"attachment; filename={os.path.basename(file_path)}"
+            )
+            return response
+    else:
+        return HttpResponse(status=404)
 
 
 def upload_image(request):
@@ -117,11 +207,10 @@ def upload_image(request):
 def result(request, upload_id):
     upload = get_object_or_404(DocumentUpload, id=upload_id)
     output_dir = os.path.join(settings.MEDIA_ROOT, "output", str(upload.id))
-    html_filename = f"converted_{upload.id}.html"
+    html_filename = os.path.basename(upload.html_file.name)
     zip_filename = f"images_{upload.id}.zip"
-
-    # Чтение HTML-контента
     html_path = os.path.join(output_dir, html_filename)
+    logger.debug(f"Attempting to open HTML file: {html_path}")
     try:
         with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
@@ -130,8 +219,7 @@ def result(request, upload_id):
         return render(
             request, "converter/result.html", {"error": "HTML file not found"}
         )
-
-    logger.info(f"Displaying result for upload {upload_id}")
+    logger.debug(f"Rendering result.html for upload {upload_id}, HTML: {html_filename}")
     return render(
         request,
         "converter/result.html",
