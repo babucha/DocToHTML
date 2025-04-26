@@ -1,23 +1,29 @@
 {% extends "./base.html" %} {% block content %}
-<div class="container">
-  <h2>Result</h2>
-  <div>{{ html_content | safe }}</div>
-  <a
-    href="{% url 'converter:download_file' upload.id 'html' %}"
-    class="btn btn-primary"
-    >Download HTML</a
-  >
-  <a
-    href="{% url 'converter:download_file' upload.id 'zip' %}"
-    class="btn btn-secondary"
-    >Download ZIP</a
-  >
-  <a href="{% url 'converter:edit_html' upload.id %}" class="btn btn-info"
-    >Edit HTML</a
-  >
-  <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary"
-    >New Upload</a
-  >
+<div class="container my-5">
+  <h3 class="my-4">Conversion Result</h3>
+  <div class="card p-3 mb-4">
+    <div>{{ html_content | safe }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a
+      href="{% url 'converter:download_file' upload.id 'html' %}"
+      class="btn btn-primary"
+    >
+      Download HTML
+    </a>
+    <a
+      href="{% url 'converter:download_file' upload.id 'zip' %}"
+      class="btn btn-secondary"
+    >
+      Download ZIP
+    </a>
+    <a href="{% url 'converter:edit_html' upload.id %}" class="btn btn-info">
+      Edit HTML
+    </a>
+    <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary">
+      New Upload
+    </a>
+  </div>
 </div>
 
 <script src="/static/js/tinymce/plugins/codesample/js/prism-core.js"></script>
@@ -27,42 +33,7 @@
 <script src="/static/js/tinymce/plugins/codesample/js/prism-json.js"></script>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    var pres = document.getElementsByTagName("pre");
-    console.log("Pre elements:", pres.length);
-    for (var i = 0; i < pres.length; i++) {
-      console.log("Pre classes:", pres[i].className);
-      var text = pres[i].textContent.trim();
-      var lang = detectLanguage(text) || "language-markup";
-      pres[i].className = "code " + lang;
-      var code = pres[i].querySelector("code");
-      if (!code) {
-        code = document.createElement("code");
-        code.className = lang;
-        code.innerHTML = pres[i].innerHTML;
-        pres[i].innerHTML = "";
-        pres[i].appendChild(code);
-      }
-      code.className = lang;
-      code.innerHTML = code.innerHTML.replace(/\u00A0|\u00B7/g, " ");
-      console.log("Code classes:", pres[i].className);
-    }
-
     Prism.highlightAll();
-
-    console.log(
-      "Spans after Prism:",
-      document.getElementsByTagName("span").length
-    );
   });
-
-  function detectLanguage(text) {
-    if (text.match(/<[a-zA-Z_][\w-]*\b[^>]*\/?>|<\/[a-zA-Z_][\w-]*>|<\?[\w-]+/))
-      return "language-markup";
-    if (text.match(/\b(class|public|static|void|int|main)\b/))
-      return "language-java";
-    if (text.match(/\b(#!\/bin\/bash|echo|export|if\s*\[|fi)\b/))
-      return "language-bash";
-    return "language-markup";
-  }
 </script>
 {% endblock %}

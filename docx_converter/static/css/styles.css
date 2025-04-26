@@ -52,3 +52,19 @@ code.language-markup {
 .mce-content-body [data-mce-selected] {
   outline: none !important;
 }
+
+/* pre.language-markup, code.language-markup,
+pre.language-java, code.language-java,
+pre.language-bash, code.language-bash {
+    border: none !important;
+    box-shadow: none !important;
+    background: #f5f2f0 !important;
+    padding: 10px !important;
+    font-family: 'Courier New', Courier, monospace !important;
+}
+pre.language-* {
+    white-space: pre-wrap !important;
+}
+.mce-content-body [data-mce-selected] {
+    outline: none !important;
+} */

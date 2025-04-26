@@ -11,6 +11,7 @@
       href="/static/js/tinymce/plugins/codesample/css/prism.css"
       rel="stylesheet"
     />
+
     <script src="/static/js/tinymce/tinymce.min.js"></script>
     <script src="/static/js/tinymce/plugins/codesample/js/prism-core.js"></script>
     <script src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"></script>
@@ -174,15 +175,21 @@
             });
 
             function wrapCode(lang) {
-              var selected = editor.selection.getContent();
+              var selected = editor.selection.getContent({ format: "text" });
               if (selected) {
-                var wrapper = `<pre class="language-${lang}"><code class="language-${lang}">${selected}</code></pre>`;
-                editor.selection.setContent(wrapper);
-                var node = editor.selection.getNode();
-                if (node.nodeName === "P" && node.querySelector("pre")) {
-                  editor.dom.replace(node.querySelector("pre"), node);
-                }
+                var pre = editor.dom.create("pre", {
+                  class: "language-" + lang,
+                  "data-mce-highlighted": "true",
+                });
+                var code = editor.dom.create("code", {
+                  class: "language-" + lang,
+                });
+                code.innerHTML = selected;
+                pre.appendChild(code);
+                editor.selection.setContent("");
+                editor.insertContent(pre.outerHTML);
               }
+              setTimeout(() => Prism.highlightAll(), 100);
             }
 
             editor.on("PreProcess", function (e) {
@@ -191,6 +198,10 @@
                 var pres = tds[i].getElementsByTagName("pre");
                 for (var j = 0; j < pres.length; j++) {
                   var text = pres[j].textContent.trim();
+                  text = text
+                    .replace(/↵/g, "\n")
+                    .replace(/…/g, "...")
+                    .replace(/\n{3,}/g, "\n\n");
                   var lang = detectLanguage(text) || "language-markup";
                   var code = pres[j].querySelector("code");
                   if (!code) {
@@ -275,14 +286,7 @@
               const text = doc.createTextNode(span.textContent);
               span.parentNode.replaceChild(text, span);
             });
-
-            console.log("Processed pre:", pre.outerHTML);
           });
-
-          console.log(
-            "Processed pre tags:",
-            doc.querySelectorAll("pre").length
-          );
           return doc.body.innerHTML;
         }
       });
