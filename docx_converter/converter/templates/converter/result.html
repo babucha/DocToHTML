@@ -32,8 +32,18 @@
     for (var i = 0; i < pres.length; i++) {
       console.log("Pre classes:", pres[i].className);
       var text = pres[i].textContent.trim();
-      var lang = detectLanguage(text);
+      var lang = detectLanguage(text) || "language-markup";
       pres[i].className = "code " + lang;
+      var code = pres[i].querySelector("code");
+      if (!code) {
+        code = document.createElement("code");
+        code.className = lang;
+        code.innerHTML = pres[i].innerHTML;
+        pres[i].innerHTML = "";
+        pres[i].appendChild(code);
+      }
+      code.className = lang;
+      code.innerHTML = code.innerHTML.replace(/\u00A0|\u00B7/g, " ");
       console.log("Code classes:", pres[i].className);
     }
 
@@ -46,12 +56,12 @@
   });
 
   function detectLanguage(text) {
-    if (text.match(/<\w+\b[^>]*>|<\/\w+>/)) return "language-markup";
+    if (text.match(/<[a-zA-Z_][\w-]*\b[^>]*\/?>|<\/[a-zA-Z_][\w-]*>|<\?[\w-]+/))
+      return "language-markup";
     if (text.match(/\b(class|public|static|void|int|main)\b/))
       return "language-java";
     if (text.match(/\b(#!\/bin\/bash|echo|export|if\s*\[|fi)\b/))
       return "language-bash";
-    if (text.match(/^\s*\{.*":.*\}\s*$/)) return "language-json";
     return "language-markup";
   }
 </script>

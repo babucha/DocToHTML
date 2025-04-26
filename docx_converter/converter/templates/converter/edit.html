@@ -16,6 +16,7 @@
     <script src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"></script>
     <script src="/static/js/tinymce/plugins/codesample/js/prism-java.js"></script>
     <script src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"></script>
+    <script src="/static/js/tinymce/plugins/codesample/js/prism-json.js"></script>
   </head>
   <body>
     <div class="container mt-5">
@@ -41,7 +42,12 @@
     <script>
       function detectLanguage(text) {
         text = text.toLowerCase().trim();
-        if (text.match(/<\w+\b[^>]*>|<\/\w+>/)) return "language-markup";
+        if (
+          text.match(
+            /<[a-zA-Z_][\w-]*\b[^>]*\/?>|<\/[a-zA-Z_][\w-]*>|<\?[\w-]+/
+          )
+        )
+          return "language-markup";
         if (text.match(/\b(class|public|static|void|int|main)\b/))
           return "language-java";
         if (text.match(/\b(#!\/bin\/bash|echo|export|if\s*\[|fi)\b/))
@@ -55,14 +61,17 @@
           encoding: "xml",
           entity_encoding: "raw",
           entities: "",
-          valid_elements: "*[*]",
-          valid_children: "+pre[code]",
+          valid_elements:
+            "*[*],pre[class|data-language|contenteditable|data-mce-*],code[class],td[*],table[*],tr[*],th[*],span[class|data-mce-*]",
+          valid_children:
+            "+pre[code],+td[pre|code],+th[pre|code],+table[tr],+tr[td|th]",
           verify_html: false,
-          extended_valid_elements: "pre[class|data-language],code[class]",
+          extended_valid_elements:
+            "pre[class|data-language|contenteditable|data-mce-*],code[class],td[*],th[*],span[class|data-mce-*]",
           plugins:
             "codesample advlist autolink lists link image charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime media table",
           toolbar:
-            "undo redo | formatselect | bold italic | forecolor backcolor | bullist numlist outdent indent | link table image | preview | styles | codesample | removeformat",
+            "undo redo | formatselect | bold italic | forecolor backcolor | bullist numlist outdent indent | link table image | preview | styles | codesample markcode unmarkcode | removeformat",
           style_formats: [
             { title: "Warning", block: "div", classes: "warning" },
             { title: "Important", block: "div", classes: "important" },
@@ -85,6 +94,7 @@
             { text: "XML/HTML", value: "markup" },
             { text: "Java", value: "java" },
             { text: "Bash", value: "bash" },
+            { text: "JSON", value: "json" },
           ],
           setup: function (editor) {
             editor.on("init", function () {
@@ -93,22 +103,122 @@
                 if (
                   !node.classList.contains("language-markup") &&
                   !node.classList.contains("language-java") &&
-                  !node.classList.contains("language-bash")
+                  !node.classList.contains("language-bash") &&
+                  !node.classList.contains("language-json")
                 ) {
                   editor.dom.addClass(node, "language-markup");
+                }
+                if (!node.querySelector("code")) {
+                  var code = editor.dom.create("code", {
+                    class: node.className,
+                  });
+                  code.innerHTML = node.innerHTML;
+                  node.innerHTML = "";
+                  node.appendChild(code);
                 }
               });
             });
 
-            editor.on("SaveContent", function (e) {
-              console.log("SaveContent:", e.content);
+            editor.ui.registry.addMenuButton("markcode", {
+              text: "Mark as Code",
+              fetch: function (callback) {
+                var items = [
+                  {
+                    type: "menuitem",
+                    text: "XML",
+                    onAction: function () {
+                      wrapCode("markup");
+                    },
+                  },
+                  {
+                    type: "menuitem",
+                    text: "Java",
+                    onAction: function () {
+                      wrapCode("java");
+                    },
+                  },
+                  {
+                    type: "menuitem",
+                    text: "Bash",
+                    onAction: function () {
+                      wrapCode("bash");
+                    },
+                  },
+                  {
+                    type: "menuitem",
+                    text: "JSON",
+                    onAction: function () {
+                      wrapCode("json");
+                    },
+                  },
+                ];
+                callback(items);
+              },
             });
 
-            editor.on("Submit", function (e) {
-              console.log("Content before submit:", editor.getContent());
+            editor.ui.registry.addButton("unmarkcode", {
+              text: "Unmark Code",
+              onAction: function () {
+                var node = editor.selection.getNode();
+                if (node.nodeName === "PRE" || node.closest("pre")) {
+                  var pre =
+                    node.nodeName === "PRE" ? node : node.closest("pre");
+                  var content = pre.querySelector("code")
+                    ? pre.querySelector("code").innerHTML
+                    : pre.innerHTML;
+                  editor.selection.setContent(`<p>${content}</p>`);
+                  editor.dom.remove(pre);
+                  console.log("Unmarkcode triggered");
+                }
+              },
+            });
+
+            function wrapCode(lang) {
+              var selected = editor.selection.getContent();
+              if (selected) {
+                var wrapper = `<pre class="language-${lang}"><code class="language-${lang}">${selected}</code></pre>`;
+                editor.selection.setContent(wrapper);
+                var node = editor.selection.getNode();
+                if (node.nodeName === "P" && node.querySelector("pre")) {
+                  editor.dom.replace(node.querySelector("pre"), node);
+                }
+              }
+            }
+
+            editor.on("PreProcess", function (e) {
+              var tds = e.node.getElementsByTagName("td");
+              for (var i = 0; i < tds.length; i++) {
+                var pres = tds[i].getElementsByTagName("pre");
+                for (var j = 0; j < pres.length; j++) {
+                  var text = pres[j].textContent.trim();
+                  var lang = detectLanguage(text) || "language-markup";
+                  var code = pres[j].querySelector("code");
+                  if (!code) {
+                    code = document.createElement("code");
+                    code.className = lang;
+                    code.innerHTML = pres[j].innerHTML;
+                    pres[j].innerHTML = "";
+                    pres[j].appendChild(code);
+                  }
+                  code.className = lang;
+                  pres[j].className = "code " + lang;
+                  if (pres[j].parentNode.tagName === "P") {
+                    pres[j].parentNode.replaceWith(pres[j]);
+                  }
+                }
+              }
+            });
+
+            editor.on("BeforeSetContent", function (e) {
+              console.log("BeforeSetContent:", e.content);
+            });
+
+            editor.on("SetContent", function (e) {
+              console.log("SetContent:", e.content);
             });
           },
           license_key: "gpl",
+          debug: true,
         });
 
         document
@@ -118,7 +228,6 @@
               .get("html_content")
               .getContent({ format: "raw" });
             content = cleanSpansInPre(content);
-
             document.getElementById("html_content").value = content;
             console.log("Form content after cleanup:", content);
           });
@@ -131,7 +240,6 @@
             pre.removeAttribute("contenteditable");
             pre.removeAttribute("data-mce-highlighted");
 
-            // Сохраняем или определяем language-*
             let languageClass = Array.from(pre.classList).find((c) =>
               c.startsWith("language-")
             );
@@ -142,9 +250,13 @@
                 Array.from(code.classList).find((c) =>
                   c.startsWith("language-")
                 ) ||
-                detectLanguage(code.innerHTML);
+                detectLanguage(code.innerHTML) ||
+                "language-markup";
             } else {
-              languageClass = languageClass || detectLanguage(pre.innerHTML);
+              languageClass =
+                languageClass ||
+                detectLanguage(pre.innerHTML) ||
+                "language-markup";
               code = doc.createElement("code");
               code.className = languageClass;
               code.innerHTML = pre.innerHTML;
@@ -157,7 +269,7 @@
               .join(" ");
             pre.setAttribute("class", classes || languageClass);
 
-            // Удаляем <span> внутри <code>
+            code.innerHTML = code.innerHTML.replace(/\u00A0|\u00B7/g, " ");
             const spans = code.querySelectorAll("span");
             spans.forEach((span) => {
               const text = doc.createTextNode(span.textContent);
