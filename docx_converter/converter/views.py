@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from weasyprint import HTML
 
 from .forms import DocumentUploadForm, HtmlEditForm
 from .models import DocumentUpload
@@ -74,7 +75,6 @@ def download_file(request, upload_id, file_type):
         with open(file_path, "r", encoding="utf-8") as f:
             html_content = f.read()
         soup = BeautifulSoup(html_content, "html.parser")
-        # Полная обвязка
         head = soup.new_tag("head")
         head.append(soup.new_tag("meta", charset="utf-8"))
         head.append(
@@ -102,7 +102,6 @@ def download_file(request, upload_id, file_type):
                 href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css",
             )
         )
-        # Встроить styles.css
         try:
             with open(
                 os.path.join(settings.STATICFILES_DIRS[0], "css/styles.css"),
@@ -150,7 +149,6 @@ def download_file(request, upload_id, file_type):
             soup.head.replace_with(head)
         else:
             soup.html.insert(0, head)
-        # Обернуть контент в container-sm
         body_content = soup.body.extract() if soup.body else soup
         new_body = soup.new_tag("body")
         container = soup.new_tag("div", attrs={"class": "container-sm mt-5"})
@@ -201,7 +199,7 @@ def result(request, upload_id):
     upload = get_object_or_404(DocumentUpload, id=upload_id)
     output_dir = os.path.join(settings.MEDIA_ROOT, "output", str(upload.id))
     html_filename = os.path.basename(upload.html_file.name)
-    zip_filename = f"images_{upload.id}.zip"
+    zip_filename = os.path.basename(upload.images_zip.name)
     html_path = os.path.join(output_dir, html_filename)
     logger.debug(f"Attempting to open HTML file: {html_path}")
     try:
@@ -223,3 +221,101 @@ def result(request, upload_id):
             "zip_filename": zip_filename,
         },
     )
+
+
+def archive_view(request):
+    query = request.GET.get("q", "")
+    sort_by = request.GET.get("sort", "-uploaded_at")
+    uploads = DocumentUpload.objects.all()
+    if query:
+        uploads = uploads.filter(docx_file__icontains=query)
+    uploads = uploads.order_by(sort_by)
+    return render(
+        request,
+        "converter/archive.html",
+        {"uploads": uploads, "query": query, "sort": sort_by},
+    )
+
+def download_pdf(request, upload_id):
+    upload = get_object_or_404(DocumentUpload, id=upload_id)
+    pdf_path = upload.html_file.path.replace(".html", ".pdf")
+    # Очищаем старый PDF
+    if os.path.exists(pdf_path):
+        os.remove(pdf_path)
+        logger.debug(f"Removed old PDF: {pdf_path}")
+    # Преобразуем HTML
+    with open(upload.html_file.path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+    soup = BeautifulSoup(html_content, "html.parser")
+    # Удаляем все ссылки на CSS
+    for link in soup.find_all("link", rel="stylesheet"):
+        href = link.get("href", "")
+        logger.debug(f"Removing stylesheet link: {href}")
+        link.decompose()
+    # Удаляем inline-стили для pre/code
+    for tag in soup.find_all(["pre", "code"]):
+        if tag.get("style"):
+            logger.debug(f"Removing inline style from {tag.name}: {tag.get('style')}")
+            del tag["style"]
+    # Преобразуем пути для картинок
+    for img in soup.find_all("img"):
+        src = img.get("src", "")
+        logger.debug(f"Original img src: {src}")
+        if src.startswith("/media/"):
+            relative_path = src[len("/media/") :]
+            absolute_path = os.path.join(settings.MEDIA_ROOT, relative_path)
+            img["src"] = absolute_path
+            logger.debug(f"Converted img src: {absolute_path}")
+    # Встраиваем styles.css
+    try:
+        with open(
+            os.path.join(settings.STATICFILES_DIRS[0], "css", "styles.css"),
+            "r",
+            encoding="utf-8",
+        ) as f:
+            css_content = f.read()
+    except FileNotFoundError:
+        logger.error(f"styles.css not found in {settings.STATICFILES_DIRS[0]}")
+        css_content = ""
+    style_tag = soup.new_tag("style")
+    style_tag.string = css_content
+    if soup.head:
+        soup.head.append(style_tag)
+    else:
+        head = soup.new_tag("head")
+        head.append(style_tag)
+        soup.insert(0, head)
+    # Логируем и сохраняем HTML
+    html_output = str(soup)
+    logger.debug(f"Final HTML length: {len(html_output)}")
+    with open(
+        os.path.join(settings.MEDIA_ROOT, "debug_html.html"), "w", encoding="utf-8"
+    ) as f:
+        f.write(html_output)
+    logger.debug(
+        f"Saved HTML to {os.path.join(settings.MEDIA_ROOT, 'debug_html.html')}"
+    )
+    HTML(string=html_output, base_url=settings.MEDIA_ROOT).write_pdf(pdf_path)
+    with open(pdf_path, "rb") as pdf_file:
+        response = HttpResponse(pdf_file.read(), content_type="application/pdf")
+        response["Content-Disposition"] = (
+            f'attachment; filename="{os.path.basename(upload.docx_file.name)}.pdf"'
+        )
+    return response
+
+def delete_upload(request, upload_id):
+    upload = get_object_or_404(DocumentUpload, id=upload_id)
+    if request.method == "POST":
+        try:
+            if upload.html_file:
+                os.remove(upload.html_file.path)
+            if upload.images_zip:
+                os.remove(upload.images_zip.path)
+            if upload.docx_file:
+                os.remove(upload.docx_file.path)
+            upload.delete()
+            logger.debug(f"Deleted upload {upload_id}")
+        except Exception as e:
+            logger.error(f"Error deleting upload {upload_id}: {e}")
+        return redirect("converter:archive")
+    return HttpResponse(status=405)

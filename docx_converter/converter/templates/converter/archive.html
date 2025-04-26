@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+  {% load converter_tags %}
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Archive</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link href="/static/css/styles.css" rel="stylesheet" />
+  </head>
+  <body>
+    <div class="container mt-5">
+      <h1>Upload Archive</h1>
+      <form method="get" class="mb-3">
+        <div class="input-group">
+          <input
+            type="text"
+            name="q"
+            class="form-control"
+            placeholder="Search by filename"
+            value="{{ query }}"
+          />
+          <button type="submit" class="btn btn-primary">Search</button>
+        </div>
+      </form>
+      <div class="mb-3">
+        <label>Sort by:</label>
+        <a
+          href="?{% if query %}q={{ query }}&{% endif %}sort=docx_file"
+          class="btn btn-sm {% if sort == 'docx_file' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+          >Name</a
+        >
+        <a
+          href="?{% if query %}q={{ query }}&{% endif %}sort=-uploaded_at"
+          class="btn btn-sm {% if sort == '-uploaded_at' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+          >Date (Newest)</a
+        >
+        <a
+          href="?{% if query %}q={{ query }}&{% endif %}sort=uploaded_at"
+          class="btn btn-sm {% if sort == 'uploaded_at' %}btn-primary{% else %}btn-outline-primary{% endif %}"
+          >Date (Oldest)</a
+        >
+      </div>
+      <table class="table table-bordered">
+        <thead class="table-dark">
+          <tr>
+            <th>Upload ID</th>
+            <th>File Name</th>
+            <th>Date</th>
+            <th style="width: 150px; background-color: darkgray;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for upload in uploads %}
+          <tr {% if not upload.is_valid %}class="table-danger"{% endif %}>
+            <td>{{ upload.id }}</td>
+            <td>
+              {{ upload.docx_file.name|basename }}{% if not upload.is_valid %}
+              <span class="badge bg-danger">No File</span>{% endif %}
+            </td>
+            <td>{{ upload.uploaded_at|date:"Y-m-d H:i:s" }}</td>
+            <td class="d-flex align-items-stretch flex-column gap-1">
+              <a
+                href="{% url 'converter:result' upload.id %}"
+                class="btn btn-primary btn-sm {% if not upload.is_valid %}disabled{% endif %}"
+                >View & Edit</a
+              >
+              <a
+                href="{% url 'converter:download_file' upload.id 'html' %}"
+                class="btn btn-secondary btn-sm {% if not upload.is_valid %}disabled{% endif %}"
+                >Download HTML</a
+              >
+              <a
+                href="{% url 'converter:download_file' upload.id 'zip' %}"
+                class="btn btn-secondary btn-sm {% if not upload.is_valid %}disabled{% endif %}"
+                >Download ZIP</a
+              >
+              <a
+                href="{% url 'converter:download_pdf' upload.id %}"
+                class="btn btn-success btn-sm {% if not upload.is_valid %}disabled{% endif %}"
+                >Download PDF</a
+              >
+              <form
+                action="{% url 'converter:delete_upload' upload.id %}"
+                method="post"
+                style="display: inline"
+              >
+                {% csrf_token %}
+                <button
+                  type="submit"
+                  class="btn btn-danger btn-sm"
+                  onclick="return confirm('Are you sure you want to delete this upload?');"
+                >
+                  Delete
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="4">No uploads found.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary mt-3 mb-3"
+        >New Upload</a
+      >
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  </body>
+</html>

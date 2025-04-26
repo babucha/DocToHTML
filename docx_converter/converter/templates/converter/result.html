@@ -17,23 +17,21 @@
     >
       Download ZIP
     </a>
+    <a
+      href="{% url 'converter:download_pdf' upload.id %}"
+      class="btn btn-success"
+    >
+      Download PDF
+    </a>
     <a href="{% url 'converter:edit_html' upload.id %}" class="btn btn-info">
       Edit HTML
+    </a>
+    <a href="{% url 'converter:archive' %}" class="btn btn-secondary">
+      View Archive
     </a>
     <a href="{% url 'converter:upload_docx' %}" class="btn btn-secondary">
       New Upload
     </a>
   </div>
 </div>
-
-<script src="/static/js/tinymce/plugins/codesample/js/prism-core.js"></script>
-<script src="/static/js/tinymce/plugins/codesample/js/prism-markup.js"></script>
-<script src="/static/js/tinymce/plugins/codesample/js/prism-java.js"></script>
-<script src="/static/js/tinymce/plugins/codesample/js/prism-bash.js"></script>
-<script src="/static/js/tinymce/plugins/codesample/js/prism-json.js"></script>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    Prism.highlightAll();
-  });
-</script>
 {% endblock %}

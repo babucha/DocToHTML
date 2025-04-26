@@ -1,19 +1,12 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload .docx</title>
-    <link href="/static/vendor/bootstrap/bootstrap.min.css" rel="stylesheet" />
-  </head>
-  <body>
-    <div class="container mt-5">
-      <h1 class="mb-4">Upload .docx File</h1>
-      <form method="post" enctype="multipart/form-data" class="mt-3">
-        {% csrf_token %} {{ form.as_p }}
-        <button type="submit" class="btn btn-primary">Convert</button>
-      </form>
-    </div>
-    <script src="/static/vendor/bootstrap/bootstrap.bundle.min.js"></script>
-  </body>
-</html>
+{% extends "./base.html" %} {% block content %}
+<div class="container mt-5">
+  <h1>Upload DOCX</h1>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %} {{ form.as_p }}
+    <button type="submit" class="btn btn-primary">Upload</button>
+    <a href="{% url 'converter:archive' %}" class="btn btn-secondary"
+      >View Archive</a
+    >
+  </form>
+</div>
+{% endblock %}

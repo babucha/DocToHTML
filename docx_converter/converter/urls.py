@@ -14,4 +14,7 @@ urlpatterns = [
         name="download_file",
     ),
     path("upload_image/", views.upload_image, name="upload_image"),
+    path("archive/", views.archive_view, name="archive"),
+    path("download/pdf/<uuid:upload_id>/", views.download_pdf, name="download_pdf"),
+    path("delete/<uuid:upload_id>/", views.delete_upload, name="delete_upload"),
 ]

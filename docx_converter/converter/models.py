@@ -1,3 +1,4 @@
+import os
 import uuid
 
 from django.db import models
@@ -16,3 +17,12 @@ class DocumentUpload(models.Model):
 
     def __str__(self):
         return f"Upload {self.id}"
+
+    def is_valid(self):
+        return all(
+            [
+                self.html_file and os.path.exists(self.html_file.path),
+                self.images_zip and os.path.exists(self.images_zip.path),
+                self.docx_file and os.path.exists(self.docx_file.path),
+            ]
+        )
